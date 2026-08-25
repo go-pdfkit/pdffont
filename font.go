@@ -129,6 +129,19 @@ func (f *Font) Width(code int) float64 {
 	return f.defaultW
 }
 
+// HasWidth reports whether the document said how wide this code is, rather
+// than the width being the fallback [Font.Width] gives for one it did not.
+//
+// It matters for a font the document does not carry. One of the fourteen
+// standard faces is written with no widths at all — every reader is expected
+// to know Times and Helvetica and Courier by heart — so a reader drawing a
+// stand-in has to take the advances from the stand-in too. Half an em for
+// every letter reads as a typewriter, which is not what the page says.
+func (f *Font) HasWidth(code int) bool {
+	_, ok := f.widths[code]
+	return ok
+}
+
 // GlyphName is what the document's encoding calls a code. ok is false for a
 // composite font, which names nothing, and for a code the encoding passes over.
 func (f *Font) GlyphName(code int) (string, bool) {
