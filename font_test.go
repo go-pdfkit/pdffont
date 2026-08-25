@@ -362,3 +362,34 @@ func TestTheProgramAFontCarries(t *testing.T) {
 		t.Error("the descriptor is not there")
 	}
 }
+
+func TestWhetherTheDocumentSaidHowWideACodeIs(t *testing.T) {
+	// One of the fourteen standard faces is written with no widths at all,
+	// so a reader drawing a stand-in has to know the difference between a
+	// width the document gave and the one it fell back on.
+	f := fontDoc(t, func(w *reader.Writer) reader.Dict {
+		return reader.Dict{
+			"Type": reader.Name("Font"), "Subtype": reader.Name("Type1"),
+			"BaseFont": reader.Name("Helvetica"), "FirstChar": reader.Integer(65),
+			"LastChar": reader.Integer(66), "Widths": widthArray(600, 700),
+		}
+	})
+	for code, want := range map[int]bool{65: true, 66: true, 67: false, 0: false} {
+		if got := f.HasWidth(code); got != want {
+			t.Errorf("HasWidth(%d) = %v, want %v", code, got, want)
+		}
+	}
+	// A standard face written with none at all says so for every code.
+	bare := fontDoc(t, func(w *reader.Writer) reader.Dict {
+		return reader.Dict{"Type": reader.Name("Font"), "Subtype": reader.Name("Type1"),
+			"BaseFont": reader.Name("Times-Bold")}
+	})
+	for _, code := range []int{'A', 'z', ' '} {
+		if bare.HasWidth(code) {
+			t.Errorf("a font with no widths says it has one for %q", rune(code))
+		}
+		if got := bare.Width(code); got != 0.5 {
+			t.Errorf("its fallback width is %v", got)
+		}
+	}
+}
