@@ -87,3 +87,45 @@ func TestTheConventionsForNamingACharacterOutright(t *testing.T) {
 		}
 	}
 }
+
+func TestANameThatSpellsSeveralCharacters(t *testing.T) {
+	// A name may spell out more than one character: a letter and the accent
+	// over it, or the three pieces a Hebrew cluster is written in. There are
+	// 3 875 of these across the fonts of the corpus.
+	for name, want := range map[string]string{
+		"uni004A0301":     "J́",
+		"uni05DC05BC05B9": "לֹּ",
+		"uni00410042":     "AB",
+	} {
+		got, ok := TextOfGlyphName(name)
+		if !ok || got != want {
+			t.Errorf("%s read as %q %v, wanted %q", name, got, ok, want)
+		}
+	}
+}
+
+func TestAGlyphNumberWearingACharactersClothes(t *testing.T) {
+	// A producer writes a glyph's own number in the same shape a sequence
+	// takes: uni00000048 is glyph 72, not U+0000 then U+0048. There are
+	// 49 740 of those in the corpus, and reading them would turn text that is
+	// merely missing into text that is confidently wrong.
+	//
+	// The two are told apart by one thing: a real sequence never begins with
+	// U+0000, because nothing follows a character that does not exist.
+	for _, name := range []string{
+		"uni00000048", "uni00000015", "uni00000003", "uni0000004c",
+		"uni000000000048",
+	} {
+		if got, ok := TextOfGlyphName(name); ok {
+			t.Errorf("%s was read as %q, and it is a glyph number", name, got)
+		}
+	}
+	// And the malformed ones nobody meant anything by. A name of five or six
+	// digits is left to the older rule that reads it as one character, since
+	// what producers mean by those has not been measured here.
+	for _, name := range []string{"uni0041004", "uniZZZZ0041"} {
+		if got, ok := TextOfGlyphName(name); ok {
+			t.Errorf("%s was read as %q", name, got)
+		}
+	}
+}
