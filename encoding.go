@@ -1,5 +1,7 @@
 package pdffont
 
+import "strings"
+
 // The two encodings a simple font is addressed through when it does not carry
 // one of its own, as a name per code. Only the codes that name a glyph appear;
 // the rest are blank.
@@ -153,7 +155,68 @@ var glyphRunes = map[string]rune{
 // naming a character directly. ok is false for a name that says nothing about
 // which character it is, which a subsetted font's own names often do not.
 func RuneOfGlyphName(name string) (rune, bool) {
+	s, ok := TextOfGlyphName(name)
+	if !ok {
+		return 0, false
+	}
+	r := []rune(s)
+	if len(r) != 1 {
+		return 0, false
+	}
+	return r[0], true
+}
+
+// TextOfGlyphName turns a glyph name into the text it stands for, which is not
+// always one character: a name may say it is a ligature of several.
+//
+// Three of the rules here are the ones the Adobe Glyph List lays down for
+// reading a name nobody has listed, and each was costing real text. A name may
+// carry a variant after a full stop — "a.sc" is a small-capital A and is still
+// an A, 7 272 of them in the corpus. A name may be several component names
+// with underscores between them — "f_i" is the fi ligature, and without this
+// "Definition" comes back "Denition", which is not a missing character so much
+// as a misspelt word. And a name may simply be one nobody thought to list.
+func TextOfGlyphName(name string) (string, bool) {
+	if name == "" {
+		return "", false
+	}
+	if r, ok := oneGlyphRune(name); ok {
+		return string(r), true
+	}
+	// A variant of a character is still that character: the part before the
+	// first full stop is the name, and what follows says which cut of it.
+	if base, _, found := strings.Cut(name, "."); found {
+		if base == "" {
+			return "", false
+		}
+		return TextOfGlyphName(base)
+	}
+	// A name made of parts with underscores between them is the parts, in
+	// order — which is how a ligature is named when it has no name of its own.
+	if strings.Contains(name, "_") {
+		// Every part that can be read contributes at least one character, and
+		// a part that cannot gives up on the whole name, so what comes out of
+		// this is never empty.
+		var out strings.Builder
+		for _, part := range strings.Split(name, "_") {
+			piece, ok := TextOfGlyphName(part)
+			if !ok {
+				return "", false
+			}
+			out.WriteString(piece)
+		}
+		return out.String(), true
+	}
+	return "", false
+}
+
+// oneGlyphRune is a name that stands for exactly one character, by any of the
+// ways a name can.
+func oneGlyphRune(name string) (rune, bool) {
 	if r, ok := glyphRunes[name]; ok {
+		return r, true
+	}
+	if r, ok := latinExtendedRunes[name]; ok {
 		return r, true
 	}
 	if r, ok := greekAndMathRunes[name]; ok {
