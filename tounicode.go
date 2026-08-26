@@ -43,6 +43,24 @@ func ReadToUnicode(data []byte) map[int]string {
 	return out
 }
 
+// maxToUnicodeEntries is how many codes one map may name.
+//
+// A bfrange names a run of codes in about twenty bytes, and only the width of
+// a single run was bounded — not how many runs a map could hold. So the size
+// of the answer had nothing to do with the size of the question: 585 bytes
+// produced 655 360 entries in 2.3 seconds, and 10 655 bytes produced
+// 13 107 200 entries and a gigabyte. Every font on every page is read this
+// way, so that was a gigabyte per font.
+//
+// The bound is not a guess. Across 5 338 /ToUnicode maps taken out of real
+// documents — arXiv figures, government forms, and mozilla's pdf.js corpus —
+// the median names 13 codes, the 99th percentile names 538, and the largest
+// names exactly 65 536: one whole two-byte code space, which is as many codes
+// as a font of that shape can have. This allows four times that, so a
+// document has to be malformed or hostile to reach it, and a map that does is
+// cut off there rather than being allowed to ask for everything.
+const maxToUnicodeEntries = 1 << 18
+
 // A cmapToken is one piece of such a program: a hexadecimal string, an array
 // bracket, or a bare word.
 type cmapToken struct {
@@ -92,6 +110,9 @@ func readBFChar(toks []cmapToken, i int, out map[int]string) int {
 		if toks[i].word == "endbfchar" {
 			return i
 		}
+		if len(out) >= maxToUnicodeEntries {
+			return i
+		}
 		if !toks[i].isHex || !toks[i+1].isHex {
 			return i
 		}
@@ -115,17 +136,20 @@ func readBFRange(toks []cmapToken, i int, out map[int]string) int {
 		if hi < lo || hi-lo > 1<<16 {
 			return i
 		}
+		if len(out) >= maxToUnicodeEntries {
+			return i
+		}
 		switch {
 		case toks[i+2].isHex:
 			base := utf16Runes(toks[i+2].hex)
-			for c := lo; c <= hi; c++ {
+			for c := lo; c <= hi && len(out) < maxToUnicodeEntries; c++ {
 				out[c] = countOn(base, c-lo)
 			}
 			i += 3
 		case toks[i+2].word == "[":
 			j := i + 3
 			for c := lo; c <= hi && j < len(toks) && toks[j].word != "]"; c++ {
-				if toks[j].isHex {
+				if toks[j].isHex && len(out) < maxToUnicodeEntries {
 					out[c] = textOf(toks[j].hex)
 				}
 				j++
