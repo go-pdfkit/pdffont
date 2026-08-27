@@ -158,8 +158,10 @@ func (f *Font) Text(code int) (string, bool) {
 		return s, true
 	}
 	if name, ok := f.names[code]; ok && f.namedByTheDocument(code) {
-		if r, ok := RuneOfGlyphName(name); ok {
-			return string(r), true
+		// Not one character: a name may say it is a ligature of several, and
+		// a code that stands for two letters has to give back two.
+		if text, ok := TextOfGlyphName(name); ok {
+			return text, true
 		}
 	}
 	if f.fallback != nil {
