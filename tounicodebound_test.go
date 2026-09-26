@@ -134,7 +134,17 @@ func TestToUnicodeBoundHoldsWithinOneBlock(t *testing.T) {
 	}
 	// The blocks after the map filled must have been refused outright, so the
 	// codes they name are not there.
-	if _, ok := m[0xffff0000]; ok {
+	// The key is computed the way the package computes it, not written out as
+	// a constant. A code is assembled into an int a byte at a time, so a
+	// four-byte code lands on a DIFFERENT NUMBER depending on how wide an int
+	// is: 4 294 901 760 where int is 64 bits, minus 65 536 where it is 32. The
+	// constant did not merely read the wrong key on a 32-bit build -- it would
+	// not compile there at all, which is how the 386 and arm lanes found it.
+	key := 0
+	for _, c := range []byte{0xff, 0xff, 0x00, 0x00} {
+		key = key<<8 | int(c)
+	}
+	if _, ok := m[key]; ok {
 		t.Error("a range block entered with a full map added to it anyway")
 	}
 }
